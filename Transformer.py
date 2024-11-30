@@ -28,38 +28,61 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, heads, dropout=0.1):
         super().__init__()
         assert d_model % heads == 0
-        self.d_model=d_model
-        self.heads=heads
-        self.d_k= d_model//heads
-        self.w_q = nn.Linear(d_model, d_model)  # wq * x = q
-        self.w_k = nn.Linear(d_model, d_model)  # wk * x = k
-        self.w_v = nn.Linear(d_model, d_model)  # wv * x = v
-        self.dropout=nn.Dropout(p=dropout)
-        self.out=nn.Linear(d_model,d_model)
-        self.attention_scores = None  # Store attention scores for visualization
+        self.d_model = d_model
+        self.heads = heads
+        self.d_k = d_model // heads
+        self.w_q = nn.Linear(d_model, d_model)
+        self.w_k = nn.Linear(d_model, d_model)
+        self.w_v = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+        self.out = nn.Linear(d_model, d_model)
 
-
-    def attention(self, q, k, v, d_k, mask):
-        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k) #scaled dot product, [batch_size, heads, seq_len (len(q)), seq_len(len(k,v))] But in self attention both are seq_len of X
-        print(f'scores: {scores.shape}')
+    def attention(self, q, k, v, d_k, mask=None):
+        # Compute attention scores
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
+        
+        # Handle mask broadcasting
         if mask is not None:
-            scores = scores.masked_fill_(mask == 0, -1e9)
-        scores = F.softmax(scores,dim=-1)
+            # Ensure mask has the right number of dimensions
+            while mask.dim() < scores.dim():
+                mask = mask.unsqueeze(0)
+            
+            # If mask shape doesn't match scores, handle broadcasting
+            if mask.shape != scores.shape:
+                # Reshape mask to match the batch dimension of scores
+                if mask.shape[-1] != scores.shape[-1]:
+                    raise ValueError(f"Mask shape {mask.shape} is incompatible with scores shape {scores.shape}")
+                
+                # Broadcast mask to match scores shape
+                mask = mask.expand(scores.shape[0], -1, -1, -1)
+            
+            # Apply mask by setting masked positions to large negative value
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+        
+        # Apply softmax and dropout
+        scores = F.softmax(scores, dim=-1)
         scores = self.dropout(scores)
+        
+        # Compute weighted sum
         output = torch.matmul(scores, v)
         return output
-    
-    def forward(self,q, k, v, mask):
-        bs = q.size(0)
-        q = self.w_q(q).view(bs, -1, self.heads, self.d_k).transpose(1, 2) # convert from [bat_size, seq_len, d_model] to [batch_size, heads, seq_len, d_k]
-        k = self.w_k(k).view(bs, -1, self.heads, self.d_k).transpose(1, 2)
-        v = self.w_v(v).view(bs, -1, self.heads, self.d_k).transpose(1, 2)
-        print(f"q: {q.shape}")
-        
-        scores=self.attention(q,k,v,self.d_k,mask)
-        concat = scores.transpose(1,2).contiguous().view(bs, -1, self.d_model)
-        output = self.out(concat)
-        return output
+
+    def forward(self, q, k, v, mask=None):
+            bs = q.size(0)
+            
+            # Linear projections and reshape
+            q = self.w_q(q).view(bs, -1, self.heads, self.d_k).transpose(1, 2)
+            k = self.w_k(k).view(bs, -1, self.heads, self.d_k).transpose(1, 2)
+            v = self.w_v(v).view(bs, -1, self.heads, self.d_k).transpose(1, 2)
+            
+            # Compute attention
+            scores = self.attention(q, k, v, self.d_k, mask)
+            
+            # Concatenate and project
+            concat = scores.transpose(1, 2).contiguous().view(bs, -1, self.d_model)
+            output = self.out(concat)
+            return output
+
 
 class MultiHeadAttentionWithVisualization(nn.Module):
     def __init__(self, d_model, heads, dropout=0.1):
@@ -205,8 +228,8 @@ class Encoder(nn.Module):
 class DecoderLayer(nn.Module):
     def __init__(self, d_model, d_ffn, heads, dropout = 0.1):
         super().__init__()
-        self.attn = MultiHeadAttention(d_model, heads, dropout)
-        self.cross_attn = MultiHeadAttention(d_model,heads, dropout)
+        self.self_attn = MultiHeadAttention(d_model, heads, dropout)
+        self.cross_attn = MultiHeadAttention(d_model, heads, dropout)
         self.norm_1 = LayerNorm(d_model)
         self.norm_2 = LayerNorm(d_model)
         self.norm_3 = LayerNorm(d_model)
@@ -216,31 +239,44 @@ class DecoderLayer(nn.Module):
         self.ffn = PositionwiseFeedForward(d_model, d_ffn)
     
     def forward(self, enc_out, enc_mask, dec_input, dec_mask):
+        # Self-attention with masking
         residual = dec_input
-        dec_out = self.attn(dec_input,dec_input,dec_input,dec_mask)
-        dec_out = self.norm_1(residual + self.dropout_1(dec_out))
+        self_attn_output = self.self_attn(dec_input, dec_input, dec_input, dec_mask)
+        dec_out = self.norm_1(residual + self.dropout_1(self_attn_output))
 
+        # Cross-attention with encoder output
         residual = dec_out
-        dec_out = self.cross_attn(dec_out,dec_out,dec_out,dec_mask)
-        dec_out = self.norm_2(residual + self.dropout_2(dec_out))
+        cross_attn_output = self.cross_attn(dec_out, enc_out, enc_out, enc_mask)
+        dec_out = self.norm_2(residual + self.dropout_2(cross_attn_output))
 
+        # Feed-forward
         residual = dec_out
-        dec_out = self.ffn(dec_out)
-        dec_out = self.norm_3(residual + self.dropout_3(dec_out))
+        ffn_output = self.ffn(dec_out)
+        dec_out = self.norm_3(residual + self.dropout_3(ffn_output))
+        
         return dec_out
     
 class Decoder(nn.Module):
-    def __init__(self, dec_vocaqb_size, d_model, d_ffn, N, heads, dropout_prob):
+    def __init__(self, dec_vocab_size, d_model, d_ffn, N, heads, dropout_prob):
         super().__init__()
-        self.embed = nn.Embedding(dec_vocaqb_size,d_model)
+        self.embed = nn.Embedding(dec_vocab_size, d_model)
         self.pe = PositionalEncoding(d_model)
         self.layers = nn.ModuleList([DecoderLayer(d_model, d_ffn, heads, dropout_prob) for _ in range(N)])
 
     def forward(self, enc_out, enc_mask, dec_input, dec_mask):
+        # Embed and add positional encoding
+        print(f"Decoder Input Shape: {dec_input.shape}")
+        print(f"Encoder Output Shape: {enc_out.shape}")
+        print(f"Encoder Mask Shape: {enc_mask.shape}")
+        print(f"Decoder Mask Shape: {dec_mask.shape}")
+        
         dec_out = self.embed(dec_input)
         dec_out = self.pe(dec_out)
+        
+        # Pass through decoder layers
         for layer in self.layers:
-            dec_out=layer(enc_out, enc_mask, dec_out, dec_mask)
+            dec_out = layer(enc_out, enc_mask, dec_out, dec_mask)
+        
         return dec_out # [batch_size, seq_len,d_model]
     
 
@@ -280,84 +316,162 @@ def create_subsequent_mask(size):
     mask = torch.triu(torch.ones((size, size)), diagonal=1).bool()
     return ~mask
 
-def test():
-    d_model=64
-    seq_len=10
-    batch_size=2
-    heads=4  
-    x=torch.randn(batch_size,seq_len,d_model)
-    print(f'X: {x.shape}')
-    # pe=PositionalEncoding(d_model=d_model)
-    # result=pe.forward(x)
-    # mha=MultiHeadAttention(d_model,heads)
-    # result = mha_vis.forward(x,x,x,mask=None)
-    # print(f'result:{result.shape}')
-    # visualize_attention(mha_vis,x,x)
-    src_dict = {
-        "<PAD>":0, "<UNK>":1, "interesting": 2, "the": 3, "time": 4, "and": 5, "machine" :6, "deep": 7, "learning": 8, "is": 9, "I": 10, "have": 11, "to": 12, "coding": 13, "hello": 14, "happy": 15}
-    tgt_dict = {"<PAD>":0,"<UNK>":1, "有趣":2, "这":3, "时间":4, "和":5, "机器":6, "深度":7, "学习":8, "是": 9, "我": 10, "有":11 , "来":12, "写代码":13, "你好":14, "开心":15}
-    src_sentences = ["machine learning is interesting",
-                "I have time coding"]
-    tgt_sentences = ["机器 学习 是 有趣",
-                     "我 有 时间 写代码"]
-    # 处理源语言句子
-    src_max_len = max(len(s.split()) for s in src_sentences)
-    src_padded = []
-    for sentence in src_sentences:
-        tokens = [src_dict.get(word, src_dict["<UNK>"]) for word in sentence.split()]
-        padding = [src_dict["<PAD>"]] * (src_max_len - len(tokens))
-        src_padded.append(tokens + padding)
+def test(d_model=64, 
+         seq_len=10, 
+         batch_size=2, 
+         heads=4, 
+         n_layers=6, 
+         d_ffn=2048, 
+         dropout=0.1, 
+         src_vocab_size=1000, 
+         tgt_vocab_size=1000,
+         src_sentences=None,
+         tgt_sentences=None):
+    """
     
-    # 处理目标语言句子
-    tgt_max_len = max(len(s.split()) for s in tgt_sentences)
-    tgt_padded = []
-    for sentence in tgt_sentences:
-        tokens = [tgt_dict.get(word, tgt_dict["<UNK>"]) for word in sentence.split()]
-        padding = [tgt_dict["<PAD>"]] * (tgt_max_len - len(tokens))
-        tgt_padded.append(tokens + padding)
-    enc_input = torch.tensor(src_padded)
+    Args:
+    - d_model: Model dimension
+    - seq_len: Sequence length
+    - batch_size: Batch size
+    - heads: Number of attention heads
+    - n_layers: Number of encoder/decoder layers
+    - d_ffn: Dimension of feed-forward network
+    - dropout: Dropout probability
+    - src_vocab_size: Source vocabulary size
+    - tgt_vocab_size: Target vocabulary size
+    - src_sentences: Optional list of source sentences
+    - tgt_sentences: Optional list of target sentences
+    
+    Returns:
+    - Tuple of (encoder_output, decoder_output, transformer_output, predictions)
+    """
+    # Default sentences if not provided
+    if src_sentences is None:
+        src_sentences = [
+            "machine learning is interesting",
+            "I have time coding"
+        ]
+    
+    if tgt_sentences is None:
+        tgt_sentences = [
+            "机器 学习 是 有趣",
+            "我 有 时间 写代码"
+        ]
+    
+    # Create dictionaries dynamically
+    def create_vocab_dict(sentences):
+        # Collect unique words
+        words = set(word for sentence in sentences for word in sentence.split())
+        # Create dictionary with special tokens
+        vocab_dict = {
+            "<PAD>": 0, 
+            "<UNK>": 1, 
+            **{word: idx+2 for idx, word in enumerate(words)}
+        }
+        return vocab_dict
+    
+    # Create vocabulary dictionaries
+    src_dict = create_vocab_dict(src_sentences)
+    tgt_dict = create_vocab_dict(tgt_sentences)
+    
+    # Process source language sentences
+    def process_sentences(sentences, vocab_dict, max_len=None):
+        if max_len is None:
+            max_len = max(len(s.split()) for s in sentences)
+        
+        padded_sequences = []
+        for sentence in sentences:
+            tokens = [vocab_dict.get(word, vocab_dict["<UNK>"]) for word in sentence.split()]
+            padding = [vocab_dict["<PAD>"]] * (max_len - len(tokens))
+            padded_sequences.append(tokens + padding)
+        
+        return torch.tensor(padded_sequences)
+    
+    # Prepare input tensors
+    enc_input = process_sentences(src_sentences, src_dict)
+    dec_input = process_sentences(tgt_sentences, tgt_dict)
+    
+    # Create masks
     enc_mask = create_pad_mask(enc_input)
-    dec_input = torch.tensor(tgt_padded)
-    size=dec_input.size(1)
-    dec_pad_mask = create_pad_mask(dec_input)  # [batch_size, 1, 1, tgt_len]
-    
-    # 创建和扩展subsequent mask
-    dec_subsequent_mask = create_subsequent_mask(size)  # [tgt_len, tgt_len]
-    dec_subsequent_mask = dec_subsequent_mask.unsqueeze(0).unsqueeze(0)  # [1, 1, tgt_len, tgt_len]
-    dec_subsequent_mask = dec_subsequent_mask.expand(batch_size, 1, size, size)  # [batch_size, 1, tgt_len, tgt_len]
-    
-    # 扩展padding mask
-    dec_pad_mask = dec_pad_mask.expand(-1, 1, size, -1)  # [batch_size, 1, tgt_len, tgt_len]
-    
-    # 组合两个mask
+        
+    # Decoder mask (padding + subsequent)
+    size = dec_input.size(1)
+    dec_pad_mask = create_pad_mask(dec_input)
+    dec_subsequent_mask = create_subsequent_mask(size)
+    dec_subsequent_mask = dec_subsequent_mask.unsqueeze(0).unsqueeze(0)
+    dec_subsequent_mask = dec_subsequent_mask.expand(batch_size, 1, size, size)
     dec_mask = dec_pad_mask & dec_subsequent_mask
-
-
-    print(enc_mask)
-    print('\n')
-    print(dec_mask)
-
-    encoder = Encoder(len(src_dict),d_model,d_ffn=2048,N=6,heads=heads, dropout=0.1)
-    enc_result = encoder(enc_input, enc_mask = enc_mask)
-    decoder = Decoder(len(tgt_dict),d_model,d_ffn=2048, N=6, heads=heads, dropout_prob=0.1)
-    dec_result = decoder(enc_input, enc_mask, dec_input, dec_mask)
-    transformer = Transformer(len(src_dict),len(tgt_dict),d_model,d_ffn = 2048, N=6, heads=heads, dropout=0.1)
-    transformer_result = transformer(enc_input,enc_mask,dec_input, dec_mask)
-    print(f"enc: {enc_result.shape}")
-    print(f'dec: {dec_result.shape}')
-    print(f'transformer: {transformer_result.shape}')
-
-    predictions = torch.argmax(transformer_result, dim=-1)
-    print("\nPredictions shape:", predictions.shape)
     
-  
-    print("\nTranslation examples:")
+    # Initialize and test components
+    encoder = Encoder(
+        enc_vocab_size=len(src_dict), 
+        d_model=d_model, 
+        d_ffn=d_ffn, 
+        N=n_layers, 
+        heads=heads, 
+        dropout=dropout
+    )
+    
+    decoder = Decoder(
+        dec_vocab_size=len(tgt_dict), 
+        d_model=d_model, 
+        d_ffn=d_ffn, 
+        N=n_layers, 
+        heads=heads, 
+        dropout_prob=dropout
+    )
+    
+    transformer = Transformer(
+        src_vocab_size=len(src_dict), 
+        tgt_vocab_size=len(tgt_dict), 
+        d_model=d_model, 
+        d_ffn=d_ffn, 
+        N=n_layers, 
+        heads=heads, 
+        dropout=dropout
+    )
+    
+    # Compute outputs
+    enc_result = encoder(enc_input, enc_mask)
+    dec_result = decoder(enc_result, enc_mask, dec_input, dec_mask)
+    transformer_result = transformer(enc_input, enc_mask, dec_input, dec_mask)
+    
+    # Get predictions
+    predictions = torch.argmax(transformer_result, dim=-1)
+    
+    # Print results and details
+    print(f"\nInput Configuration:")
+    print(f"Model Dimension: {d_model}")
+    print(f"Sequence Length: {seq_len}")
+    print(f"Batch Size: {batch_size}")
+    print(f"Attention Heads: {heads}")
+    print(f"Number of Layers: {n_layers}")
+    
+    print(f"\nOutput Shapes:")
+    print(f"Encoder Output: {enc_result.shape}")
+    print(f"Decoder Output: {dec_result.shape}")
+    print(f"Transformer Output: {transformer_result.shape}")
+    print(f"Predictions Shape: {predictions.shape}")
+    
+    print("\nTranslation Examples:")
     for i in range(len(src_sentences)):
         print(f"\nSource: {src_sentences[i]}")
         print(f"Target: {tgt_sentences[i]}")
+        
+        # Reverse lookup for predictions
         pred_indices = predictions[i].tolist()
         pred_words = [list(tgt_dict.keys())[list(tgt_dict.values()).index(idx)] for idx in pred_indices]
         print(f"Predicted: {' '.join(pred_words)}")
+    
+    return enc_result, dec_result, transformer_result, predictions
 
+def main():
+    # Default test
+    print("\n--- Default Test ---")
+    test()
 
-test()
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()

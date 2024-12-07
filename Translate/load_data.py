@@ -1,5 +1,3 @@
-#!usr/bin/env python
-# -*- coding:utf-8 -*-
 
 """
 Note: When training Transformer models on Chinese corpora, 
@@ -13,6 +11,7 @@ but may vary between different batches.
 import numpy as np
 from langconv import Converter
 from nltk import word_tokenize
+import nltk
 from collections import Counter
 import config
 import torch
@@ -207,13 +206,15 @@ class MyDatasets(Dataset):
         assert decoder_input.size(0) == self.max_seq_len
         assert decoder_output.size(0) == self.max_seq_len
 
+        print(f'shape: {decoder_output.shape}')
+
         return {
             "encoder_input": encoder_input,  # Input for encoder (seq_len)
             "decoder_input": decoder_input,  # Input for decoder (seq_len)
             "encoder_mask": (encoder_input != self.PAD).unsqueeze(0).unsqueeze(0).int(),  # Mask to ignore padding (1, 1, seq_len)
             "decoder_mask": (decoder_input != self.PAD).unsqueeze(0).int() & causal_mask(
                 decoder_output.size(0)),  # Combined padding and causal masking
-            "label": decoder_output,  # Target output sequence (seq_len)
+            "label": decoder_output,  # Target output sequence (seq_len) # [batch_size, seq_len]
             "src_text": self.data_src[index] + [" "] * (enc_num_padding_tokens + 2),  # Original source text with padding
             "tgt_text": self.data_tgt[index] + [" "] * (dec_num_padding_tokens + 1),  # Original target text with padding
         }
@@ -285,6 +286,12 @@ def get_dataloader(datasets, batch_size, num_workers, ratio):
 
 if __name__ == '__main__':
     # Example usage and testing
-    dataset = MyDatasets(config.TRAIN_FILE, max_seq_len=30)
-    x = dataset[0]
-    print()
+    # nltk.download('punkt')
+    # nltk.download('punkt_tab') 
+    dataset = MyDatasets(config.TRAIN_FILE, max_seq_len=100)
+    train_dataloader, _ = get_dataloader(dataset,16,0,0.8)
+    batch_iter = iter(train_dataloader)
+    batch = next(batch_iter)
+    encoder_input = batch['encoder_input'][3]
+    print(f'{encoder_input.shape}: {encoder_input}')
+    print(dataset.tgt_index_dict)

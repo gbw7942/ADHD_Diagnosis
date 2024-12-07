@@ -205,7 +205,6 @@ class EncoderLayer(nn.Module):
     def forward(self, enc_input, mask):
         enc_output = self.norm_1(enc_input + self.dropout_1(self.attn(enc_input, enc_input, enc_input, mask)))
         enc_output = self.norm_2(enc_output + self.dropout_2(self.ffn(enc_output)))
-        print(f'enc_ouput: {enc_output.shape}') #[batch_size, seq_len, d_model]
         return enc_output
     
 class Encoder(nn.Module):
@@ -217,7 +216,6 @@ class Encoder(nn.Module):
 
     def forward(self, enc_input, enc_mask): # enc_input is [batch_size, seq_len]
         enc_out = self.embed(enc_input)
-        print(f"original: {enc_out.shape}")
         enc_out = self.pe(enc_out)
         for layer in self.layers:
             enc_out = layer(enc_out, enc_mask)
@@ -265,10 +263,6 @@ class Decoder(nn.Module):
 
     def forward(self, enc_out, enc_mask, dec_input, dec_mask):
         # Embed and add positional encoding
-        print(f"Decoder Input Shape: {dec_input.shape}")
-        print(f"Encoder Output Shape: {enc_out.shape}")
-        print(f"Encoder Mask Shape: {enc_mask.shape}")
-        print(f"Decoder Mask Shape: {dec_mask.shape}")
         
         dec_out = self.embed(dec_input)
         dec_out = self.pe(dec_out)

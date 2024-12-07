@@ -20,7 +20,7 @@ DEVICE = "cuda"
 
 # 训练参数设置
 BATCH_SIZE = 32  # 批次大小
-EPOCHS = 20  # 训练轮数
+EPOCHS = 50  # 训练轮数
 NUM_WORKERS = 0
 IS_SHUFFLE = True
 DROP_LASR = True  # 如果最后一个batch的数据量小于指定的batch_size，是否丢弃

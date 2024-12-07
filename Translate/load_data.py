@@ -206,7 +206,6 @@ class MyDatasets(Dataset):
         assert decoder_input.size(0) == self.max_seq_len
         assert decoder_output.size(0) == self.max_seq_len
 
-        print(f'shape: {decoder_output.shape}')
 
         return {
             "encoder_input": encoder_input,  # Input for encoder (seq_len)

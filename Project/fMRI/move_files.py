@@ -11,7 +11,7 @@ import os
         - sfnwmrda{subject#}_session_{session#}_rest_{scan#}.nii.gz: Preprocessed resting state fMRI data, written into MNI space at 4 mm x 4 mm x 4 mm voxel resolution, nuisance variance removed [1,2], 
             - filtered using a bandpass filter (0.009 Hz < f < 0.08 Hz) [2,3,4] and blurred with a 6-mm FWHM Gaussian filter
 """
-
+#MARK: - Move Files for ../Data
                    
 base_dir = "../data"
 dataset_dir = "../data/model_data"

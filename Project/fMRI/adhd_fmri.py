@@ -14,10 +14,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
-import logging
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
-logging.getLogger('tensorflow').setLevel(logging.FATAL)
 
 # ============================ DATA WORK ============================
 

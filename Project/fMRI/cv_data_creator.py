@@ -1,10 +1,10 @@
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
-data_filepath = "./data/model_data.csv"
-training_filepath = "../Data/training_data_{}"
-validation_filepath = "../Data/validatation_data_{}"
-testing_filepath = "../Data/testing_data"
+data_filepath = "./data/finalist.csv"
+training_filepath = "./data/training_data_{}"
+validation_filepath = "./data/validatation_data_{}"
+testing_filepath = "./data/testing_data"
 
 model_csv = data_filepath
 model_data = pd.read_csv(model_csv)

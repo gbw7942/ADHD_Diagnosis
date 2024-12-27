@@ -10,28 +10,32 @@ def parse_dx(dx):
         return 1
     
 def move_files():
-    base_dir = "../data"
-    dataset_dir = "../data/model_data"
+    base_dir = "/root/autodl-tmp/CNNLSTM/Project/Data"
+    dataset_dir = "/root/autodl-tmp/CNNLSTM/Project/Data"
     files_list = []
-    for file in os.listdir(dataset_dir):
-        nums = re.findall(r'\d+', file)
-        file_id = None
-        for num in nums: 
-            if len(num) > 1: 
-                file_id = int(num)
+    files = [f for f in os.listdir(dataset_dir) if f.endswith('1_bold.nii.gz')] 
+    print(len(files))
+    print(files[0:9])
+    # for file in files:
+    #     nums = re.findall(r'\d+', file)
+    #     file_id = None
+    #     for num in nums: 
+    #         if len(num) > 1: 
+    #             file_id = int(num)
                 
-        files_list.append({"ScanDir ID": file_id, "Image": file} )
+    #     files_list.append({"ScanDir ID": file_id, "Image": file} )
 
-    images_df = pd.DataFrame(files_list)
+    # images_df = pd.DataFrame(files_list)
 
-    adhd_info = pd.read_csv("./data/adhd200_preprocessed_phenotypics.tsv", delimiter="\t")[['ScanDir ID','DX']]
+    # adhd_info = pd.read_csv("./data/adhd200_preprocessed_phenotypics.tsv", delimiter="\t")[['ScanDir ID','DX']]
 
-    model_data = adhd_info.merge(images_df, on='ScanDir ID')
+    # model_data = adhd_info.merge(images_df, on='ScanDir ID')
 
-    for index,row in model_data.iterrows():
-        if row['DX'] == 'pending':
-            model_data.drop(index,axis=0,inplace=True)
+    # for index,row in model_data.iterrows():
+    #     if row['DX'] == 'pending':
+    #         model_data.drop(index,axis=0,inplace=True)
 
-    model_data['DX'] = model_data['DX'].apply(parse_dx)
+    # model_data['DX'] = model_data['DX'].apply(parse_dx)
 
-    model_data.to_csv(os.path.join("./data", "model_data.csv"), index=False)
+    # model_data.to_csv(os.path.join("./data", "model_data.csv"), index=False)
+move_files()

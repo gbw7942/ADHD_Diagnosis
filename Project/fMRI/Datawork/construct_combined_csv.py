@@ -27,4 +27,4 @@ def combine_csv_files(input_dir, output_file):
     print(f"Combined {len(csv_files)} CSV files into {output_file}")
 
 # Example usage
-combine_csv_files("../Data","./data/megafile.csv")
+combine_csv_files("/root/autodl-tmp/ADHD200","/root/autodl-tmp/CNNLSTM/Project/fMRImegafile.csv")

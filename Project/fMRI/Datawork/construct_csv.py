@@ -48,7 +48,7 @@ def process_task_rest_files(input_dir, mega_file, output_file):
     print(f"Results saved to {output_file}")
 
 # Example usage
-input_directory = '../Data'
-megafile_path = './data/adhd200_preprocessed_phenotypics.tsv'
-output_csv = './data/finalist.csv'
+input_directory = '/root/autodl-tmp/CNNLSTM/Project/Data'
+megafile_path = '/root/autodl-tmp/CNNLSTM/archive/Diagnosing-ADHD-With-ConvLSTM/References/adhd200_preprocessed_phenotypics.tsv'
+output_csv = 'finalist.csv'
 process_task_rest_files(input_directory, megafile_path, output_csv)

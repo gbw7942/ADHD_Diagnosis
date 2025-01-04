@@ -13,13 +13,14 @@ import os
 """
 #MARK: - Move Files for ../Data
                    
-base_dir = "../data"
-dataset_dir = "../data/model_data"
-
-for filepath in Path(base_dir).glob('**/s*wmrda*session_*_rest_*.nii.gz'):
+base_dir = "/root/autodl-tmp/ADHD200"
+dataset_dir = "/root/autodl-tmp/CNNLSTM/Project/Data"
+print("start")
+for filepath in Path(base_dir).glob('**/*.nii.gz'):
+    print("star")
     str_split = str(filepath).split('/')
     origin = str_split[2]
     filename = str_split[-1]
-    new_filename = origin + "_" + filename
+    new_filename = filename
     new_filepath = os.path.join(dataset_dir, new_filename)
     os.rename(filepath, new_filepath)

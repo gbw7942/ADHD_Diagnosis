@@ -1,0 +1,16 @@
+DATASET_DIR = "/root/autodl-tmp/CNNLSTM/Project/Data"
+CSV_PATH = "/root/autodl-tmp/CNNLSTM/Project/fMRI/"
+METADATA_CSV = 'finalist.csv'
+FOLD_DATA_CSV = 'fold_data.csv'
+PREPROCESSED_DIR = "/root/autodl-tmp/CNNLSTM/Project/preData"
+NUM_CLASSES = 4
+TIME_LENGTH = 177
+N_SPLITS = 5
+EPOCH = 50
+BATCH_SIZE = 8
+LR = 0.001
+FEATURE_DIM = 128
+NHEAD = 8
+ENCODER_LAYERS = 6
+DECODER_LAYERS = 6
+DROP_OUT = 0.1
